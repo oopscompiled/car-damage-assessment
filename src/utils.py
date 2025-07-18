@@ -113,6 +113,20 @@ def visualize(images_path, n=5):
         plt.axis('off')
         plt.show()
 
+def count_instances(label_path):
+    """ Counts instances from a label folder"""
+    d = dict()
+
+    for filename in os.listdir(label_path):
+        if filename.endswith('txt'):
+            source = os.path.join(label_path, filename)
+            with open(source, 'r') as txt:
+                for line in txt:
+                    if line.strip():
+                        cls = line.split()[0]
+                        d[cls] = d.get(cls, 0) + 1
+    return d
+
 def manual_inspect(paths: str | list[str], target: int | list[int]):
     """
     Inspects YOLO-style label files and prints matches for given class IDs.
