@@ -1,8 +1,9 @@
 import os
 from collections import Counter, defaultdict
 from glob import glob
-import matplotlib.image as imd # or PIL
+import matplotlib.image as imd
 import matplotlib.pyplot as plt
+from PIL import Image, UnidentifiedImageError
 
 class Preprocess:
     REMOVE_CLASS = 18
@@ -68,7 +69,6 @@ class Preprocess:
         else:
             os.remove(filepath)
             self.removed_labels += 1
-            # Attempt to delete the corresponding image
             img_removed = False
             for ext in self.image_exts:
                 img_path = os.path.join(images_dir, basename + ext)
@@ -145,3 +145,34 @@ def manual_inspect(paths: str | list[str], target: int | list[int]):
                     hits += 1
 
     return f'Total hits: {hits}'
+
+
+class ImagePreprocessor:
+    def __init__(self, input_dir, base_output_name='augmented'):
+        self.input_dir = input_dir
+        self.base_output_name = base_output_name
+        self.counter = 0
+
+    def _get_output_dir(self):
+        return os.path.join(self.input_dir, f"{self.base_output_name}__{self.counter}")
+
+    def process(self):
+        while os.path.exists(self._get_output_dir()):
+            self.counter += 1
+
+        output_dir = self._get_output_dir()
+        os.makedirs(output_dir)
+
+        for i, filename in enumerate(os.listdir(self.input_dir)):
+            filepath = os.path.join(self.input_dir, filename)
+
+            try:
+                with Image.open(filepath) as im:
+                    im = im.convert("RGB")
+                    output_path = os.path.join(output_dir, f"augmented_{i}.jpg")
+                    im.save(output_path, "JPEG")
+                    print(f"Saved: {output_path}")
+            except UnidentifiedImageError:
+                print(f"Skipped (Unknown format): {filename}") # like .avif and others
+            except Exception as e:
+                print(f"Error while processing {filename}: {e}")
