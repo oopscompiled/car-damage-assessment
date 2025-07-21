@@ -33,7 +33,7 @@ class Preprocess:
                                 cls = int(parts[0])
                                 original_image_counter[cls].add(filepath)
 
-        print('\n📊 Initial stats (number of images per original class):')
+        print('\nInitial stats (number of images per original class):')
         for cls in sorted(original_image_counter):
             print(f'Class {cls}: {len(original_image_counter[cls])} images')
 
@@ -102,6 +102,36 @@ class Preprocess:
         self.prel_stats()
         self.process_all()
 
+class ImagePreprocessor:
+    def __init__(self, input_dir, base_output_name='augmented'):
+        self.input_dir = input_dir
+        self.base_output_name = base_output_name
+        self.counter = 0
+
+    def _get_output_dir(self):
+        return os.path.join(self.input_dir, f"{self.base_output_name}__{self.counter}")
+
+    def process(self):
+        while os.path.exists(self._get_output_dir()):
+            self.counter += 1
+
+        output_dir = self._get_output_dir()
+        os.makedirs(output_dir)
+
+        for i, filename in enumerate(os.listdir(self.input_dir)):
+            filepath = os.path.join(self.input_dir, filename)
+
+            try:
+                with Image.open(filepath) as im:
+                    im = im.convert("RGB")
+                    output_path = os.path.join(output_dir, f"augmented_{i}.jpg")
+                    im.save(output_path, "JPEG")
+                    print(f"Saved: {output_path}")
+            except UnidentifiedImageError:
+                print(f"Skipped (Unknown format): {filename}") # like .avif and others
+            except Exception as e:
+                print(f"Error while processing {filename}: {e}")
+
 
 def visualize(images_path, n=5):
     """Visualizes n images from a dataset"""
@@ -142,7 +172,7 @@ def manual_inspect(paths: str | list[str], target: int | list[int]):
         paths = glob(paths)
         
     if isinstance(target, int):
-        target = {target} #remove duplicates
+        target = {target} #remove duplicate
     else:
         target = set(target)
 
@@ -160,33 +190,43 @@ def manual_inspect(paths: str | list[str], target: int | list[int]):
 
     return f'Total hits: {hits}'
 
+def folder_identity(folder1, folder2, auto_delete=False):
+    """
+    Compares filenames (without extensions) in two folders and prints
+    which files are missing in each.
 
-class ImagePreprocessor:
-    def __init__(self, input_dir, base_output_name='augmented'):
-        self.input_dir = input_dir
-        self.base_output_name = base_output_name
-        self.counter = 0
+    Optionally: Allows deleting files in folder2 that have no match in folder1.
 
-    def _get_output_dir(self):
-        return os.path.join(self.input_dir, f"{self.base_output_name}__{self.counter}")
+    Args:
+        folder1 (str): Path to the first folder (e.g. images).
+        folder2 (str): Path to the second folder (e.g. labels).
+        auto_delete (bool): If True, will ask to delete unmatched files in folder2.
+    """
+    def get_names(folder):
+        return set(os.path.splitext(f)[0] for f in os.listdir(folder) if not f.startswith('.'))
 
-    def process(self):
-        while os.path.exists(self._get_output_dir()):
-            self.counter += 1
+    names1 = get_names(folder1)
+    names2 = get_names(folder2)
 
-        output_dir = self._get_output_dir()
-        os.makedirs(output_dir)
+    only_in_1 = names1 - names2
+    only_in_2 = names2 - names1
 
-        for i, filename in enumerate(os.listdir(self.input_dir)):
-            filepath = os.path.join(self.input_dir, filename)
+    print(f"🔎 Files in '{folder1}' but missing in '{folder2}':")
+    for name in sorted(only_in_1):
+        print("  ", name)
 
-            try:
-                with Image.open(filepath) as im:
-                    im = im.convert("RGB")
-                    output_path = os.path.join(output_dir, f"augmented_{i}.jpg")
-                    im.save(output_path, "JPEG")
-                    print(f"Saved: {output_path}")
-            except UnidentifiedImageError:
-                print(f"Skipped (Unknown format): {filename}") # like .avif and others
-            except Exception as e:
-                print(f"Error while processing {filename}: {e}")
+    print(f"\n🔎 Files in '{folder2}' but missing in '{folder1}':")
+    for name in sorted(only_in_2):
+        print("  ", name)
+
+    if only_in_2 and auto_delete:
+        confirm = input(f"\n❗ Do you want to delete {len(only_in_2)} unmatched files from '{folder2}'? [Y/N]: ").lower()
+        if confirm == "y":
+            for filename in os.listdir(folder2):
+                name, _ = os.path.splitext(filename)
+                if name in only_in_2:
+                    path = os.path.join(folder2, filename)
+                    os.remove(path)
+                    print(f"Deleted: {filename}")
+        else:
+            print("Deletion canceled.")
