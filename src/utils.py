@@ -193,7 +193,7 @@ def manual_inspect(paths: str | list[str], target: int | list[int]):
 def folder_identity(folder1, folder2, auto_delete=False):
     """
     Compares filenames (without extensions) in two folders and prints
-    which files are missing in each.
+    which files are missing in each. Useful in detecting unlabeled images (backgrounds)
 
     Optionally: Allows deleting files in folder2 that have no match in folder1.
 

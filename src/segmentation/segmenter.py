@@ -1,19 +1,17 @@
 # src/segmentation/segmenter.py
-import cv2
 from ultralytics import YOLO
 
 class Segmenter:
-    def __init__(self, model_path, conf_thresh=0.5, input_size=1280):
+    def __init__(self, model_path,input_size=1280):
         self.model = YOLO(model_path)
-        self.conf_thresh = conf_thresh
         self.input_size = input_size
         self.class_names = self.model.names
 
-    def predict(self, img):
+    def predict(self, img, conf=0.5):
         if img is None:
             raise ValueError("Image is None")
 
-        results = self.model.predict(img, conf=self.conf_thresh, verbose=False)[0]
+        results = self.model.predict(img, conf=conf, verbose=False)[0]
 
         masks, boxes, classes, confidences = [], [], [], []
 
