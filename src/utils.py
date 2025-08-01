@@ -4,6 +4,7 @@ from glob import glob
 import matplotlib.image as imd
 import matplotlib.pyplot as plt
 from PIL import Image, UnidentifiedImageError
+import numpy as np
 import random
 import cv2
 import matplotlib.patches as patches
@@ -11,7 +12,7 @@ from ultralytics import YOLO
 
 SEED = 42
 
-def set_seed(seed=SEED):
+def set_seed(seed=42):
     import random, numpy as np, torch
     random.seed(seed)
     np.random.seed(seed)
@@ -346,3 +347,60 @@ def folder_identity(folder1, folder2, auto_delete=False):
                     print(f"Deleted: {filename}")
         else:
             print("Deletion canceled.")
+
+
+# 03_scoring.ipynb
+
+def iou(boxA, boxB):
+    """Intersection over Union (IoU) for 2 bbox"""
+    # (x_min, y_min, x_max, y_max)
+    # (x_min, y_min, x_max, y_max)
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+    
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+
+    boxAArea = max(0, (boxA[2] - boxA[0])) * max(0, (boxA[3] - boxA[1]))
+    boxBArea = max(0, (boxB[2] - boxB[0])) * max(0, (boxB[3] - boxB[1]))
+    union = float(boxAArea + boxBArea - interArea + 1e-5) # eps to avoid div 0
+
+    return interArea / union if union > 0.0 else 0.0
+
+
+def build_damage_summary(image_path, model_damage, model_parts, conf=0.7, iou_thr=0.1):
+    img = cv2.imread(image_path)
+
+    if img is None:
+        raise ValueError(f"Unable to load image: {image_path}\nPlease check the image path")
+    
+    damage_results = model_damage.predict(img, conf=conf, iou=iou_thr)
+    parts_results = model_parts.predict(img, conf=conf, iou=iou_thr)
+
+    damage_summary = []
+
+    for i, dmg_box in enumerate(damage_results["boxes"]):
+        damage_cls = model_damage.class_names[damage_results["classes"][i]]
+        damage_conf = damage_results["confidences"][i]
+
+        best_match = None
+        best_score = 0.0
+
+        for j, part_box in enumerate(parts_results["boxes"]):
+            part_cls = model_parts.class_names[parts_results["classes"][j]]
+            score = iou(dmg_box, part_box)
+
+            if score > best_score:
+                best_score = score
+                best_match = part_cls
+
+        if best_match:
+            damage_summary.append({
+                "damage": damage_cls,
+                "part": best_match,
+                "confidence": damage_conf,
+                "iou": best_score
+            })
+
+    return damage_summary
