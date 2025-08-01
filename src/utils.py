@@ -12,7 +12,7 @@ from ultralytics import YOLO
 
 SEED = 42
 
-def set_seed(seed=42):
+def set_seed(seed=SEED):
     import random, numpy as np, torch
     random.seed(seed)
     np.random.seed(seed)
@@ -146,7 +146,7 @@ class ImagePreprocessor:
                     im.save(output_path, "JPEG")
                     print(f"Saved: {output_path}")
             except UnidentifiedImageError:
-                print(f"Skipped (Unknown format): {filename}") # like .avif and others
+                print(f"Skipped (Unknown format): {filename}") # like .avif, .heic and others
             except Exception as e:
                 print(f"Error while processing {filename}: {e}")
 
@@ -350,31 +350,39 @@ def folder_identity(folder1, folder2, auto_delete=False):
 
 
 # 03_scoring.ipynb
+def mask_iou(box, mask):
+    """
+    IoU between bbox and binary mask
+    box: [x0, y0, x1, y1]
+    mask: numpy.ndarray (H, W) with 0 and 1
+    """
+    x0, y0, x1, y1 = map(int, box)
+    h, w = mask.shape[:2]
 
-def iou(boxA, boxB):
-    """Intersection over Union (IoU) for 2 bbox"""
-    # (x_min, y_min, x_max, y_max)
-    # (x_min, y_min, x_max, y_max)
-    xA = max(boxA[0], boxB[0])
-    yA = max(boxA[1], boxB[1])
-    xB = min(boxA[2], boxB[2])
-    yB = min(boxA[3], boxB[3])
-    
-    interArea = max(0, xB - xA) * max(0, yB - yA)
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(w, x1), min(h, y1)
 
-    boxAArea = max(0, (boxA[2] - boxA[0])) * max(0, (boxA[3] - boxA[1]))
-    boxBArea = max(0, (boxB[2] - boxB[0])) * max(0, (boxB[3] - boxB[1]))
-    union = float(boxAArea + boxBArea - interArea + 1e-5) # eps to avoid div 0
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
 
-    return interArea / union if union > 0.0 else 0.0
+    mask_crop = mask[y0:y1, x0:x1]
+
+    if mask_crop.size == 0:
+        return 0.0
+
+    box_area = (x1 - x0) * (y1 - y0)
+    mask_area = np.count_nonzero(mask_crop)
+    inter_area = mask_area
+
+    union = float(box_area + np.count_nonzero(mask) - inter_area + 1e-6)
+    return inter_area / union if union > 0 else 0
 
 
-def build_damage_summary(image_path, model_damage, model_parts, conf=0.7, iou_thr=0.1):
+def build_damage_summary(image_path, model_damage, model_parts, conf=0.5, iou_thr=0.1):
     img = cv2.imread(image_path)
-
     if img is None:
-        raise ValueError(f"Unable to load image: {image_path}\nPlease check the image path")
-    
+        raise ValueError(f"Unable to load image: {image_path}\nPlease check image path")
+
     damage_results = model_damage.predict(img, conf=conf, iou=iou_thr)
     parts_results = model_parts.predict(img, conf=conf, iou=iou_thr)
 
@@ -385,17 +393,26 @@ def build_damage_summary(image_path, model_damage, model_parts, conf=0.7, iou_th
         damage_conf = damage_results["confidences"][i]
 
         best_match = None
-        best_score = 0.0
+        best_score = 0
 
-        for j, part_box in enumerate(parts_results["boxes"]):
+        for j, _ in enumerate(parts_results["boxes"]):
             part_cls = model_parts.class_names[parts_results["classes"][j]]
-            score = iou(dmg_box, part_box)
+
+            if "masks" in parts_results and parts_results["masks"][j] is not None:
+                # polygon to binary mask
+                polygon = np.array(parts_results["masks"][j], dtype=np.int32)
+                mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                cv2.fillPoly(mask, [polygon], 1)
+                score = mask_iou(dmg_box, mask)
+            else:
+                score = mask_iou(dmg_box, np.zeros(img.shape[:2], dtype=np.uint8))
+
 
             if score > best_score:
                 best_score = score
                 best_match = part_cls
 
-        if best_match:
+        if best_score > 0.3:  # 
             damage_summary.append({
                 "damage": damage_cls,
                 "part": best_match,
@@ -404,3 +421,7 @@ def build_damage_summary(image_path, model_damage, model_parts, conf=0.7, iou_th
             })
 
     return damage_summary
+
+
+def prepare_report():
+    pass
