@@ -378,7 +378,7 @@ def mask_iou(box, mask):
     return inter_area / union if union > 0 else 0
 
 
-def build_damage_summary(image_path, model_damage, model_parts, conf=0.7, iou_thr=0.1):
+def build_damage_summary(image_path, model_damage, model_parts, conf=0.65, iou_thr=0.1):
     img = cv2.imread(image_path)
     if img is None:
         raise ValueError(f"Unable to load image: {image_path}\nPlease check image path")
