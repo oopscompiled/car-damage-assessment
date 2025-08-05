@@ -378,7 +378,7 @@ def mask_iou(box, mask):
     return inter_area / union if union > 0 else 0
 
 
-def build_damage_summary(image_path, model_damage, model_parts, conf=0.5, iou_thr=0.1):
+def build_damage_summary(image_path, model_damage, model_parts, conf=0.7, iou_thr=0.1):
     img = cv2.imread(image_path)
     if img is None:
         raise ValueError(f"Unable to load image: {image_path}\nPlease check image path")
@@ -422,6 +422,20 @@ def build_damage_summary(image_path, model_damage, model_parts, conf=0.5, iou_th
 
     return damage_summary
 
+def text_prepare(text):
+    if text is None:
+        raise ValueError("You need to pass text (list of strings or text)")
+    
+    cwd = os.getcwd()
+    os.makedirs('report', exist_ok=True)
+    folder = os.path.join(cwd, 'report')
+    file_path = os.path.join(folder, 'report.txt')
+    
+    with open(file_path, 'w', encoding='utf-8') as f:
+        if isinstance(text, str):
+            f.write(text)
+        else:
+            for line in text:
+                f.write(str(line) + '\n')
 
-def prepare_report():
-    pass
+    print('File created')
