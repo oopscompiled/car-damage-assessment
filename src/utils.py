@@ -169,7 +169,7 @@ class Inference:
     def get_class_color(self, cls_id):
         return self.colors[cls_id % len(self.colors)]
 
-    def visualize_prediction(self, img, results):
+    def visualize_prediction(self, img, results, save_path=None):
         _, ax = plt.subplots(figsize=(12, 8))
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         ax.imshow(img_rgb)
@@ -210,9 +210,16 @@ class Inference:
         ax.axis('off')
         ax.set_title('YOLO Predictions + Masks' if has_masks else 'YOLO Predictions')
         plt.tight_layout()
-        plt.show()
 
-    def run(self, conf=0.5, iou=0.3, filter_classes=True):
+        if save_path: # save figure for future use
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
+        else:
+            plt.show()
+
+
+    def run(self, conf=0.5, iou=0.3, filter_classes=True, save_path=None):
         ext = os.path.splitext(self.file_path)[-1].lower()
 
         if ext in self.image_exts:
@@ -223,7 +230,7 @@ class Inference:
                 iou=iou,
                 filter_classes=filter_classes
             )
-            self.visualize_prediction(img, results)
+            self.visualize_prediction(img, results, save_path=save_path)
 
         elif ext in self.video_exts:
             model = YOLO(self.model.model.ckpt_path)
