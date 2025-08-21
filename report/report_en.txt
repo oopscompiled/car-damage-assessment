@@ -1,0 +1,1 @@
+broken_light in hood (conf=0.92, IoU=0.10) — Estimated Cost: [LLM Estimate Needed]
