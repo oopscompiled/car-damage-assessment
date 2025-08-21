@@ -419,7 +419,7 @@ def build_damage_summary(image_path, model_damage, model_parts, conf=0.65, iou_t
                 best_score = score
                 best_match = part_cls
 
-        if best_score > 0.3:  # 
+        if best_score > 0.05:
             damage_summary.append({
                 "damage": damage_cls,
                 "part": best_match,
@@ -429,15 +429,16 @@ def build_damage_summary(image_path, model_damage, model_parts, conf=0.65, iou_t
 
     return damage_summary
 
-def text_prepare(text):
+def text_prepare(text, language='en'):
     if text is None:
         raise ValueError("You need to pass text (list of strings or text)")
     
     cwd = os.getcwd()
     os.makedirs('report', exist_ok=True)
     folder = os.path.join(cwd, 'report')
-    file_path = os.path.join(folder, 'report.txt')
-    
+    file_path = os.path.join(folder, f'report_{language}.txt')
+
+
     with open(file_path, 'w', encoding='utf-8') as f:
         if isinstance(text, str):
             f.write(text)
@@ -445,4 +446,4 @@ def text_prepare(text):
             for line in text:
                 f.write(str(line) + '\n')
 
-    print('File created')
+    print(f'File created at {file_path}')
