@@ -1,0 +1,48 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# macOS Finder tags
+._*
+
+# Spotlight files
+.metadata_never_index
+.fseventsd
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Env files
+.venv/
+venv/
+
+# others
+*.log
+*.swp
+*.tmp
+*.bak
+*.txt
+
+
+# игнорируем веса моделей
+weights/
+*.pt
+*.pth
+*.ckpt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+temp
+
+main.py
+main.ipynb
+
+models
