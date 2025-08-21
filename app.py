@@ -4,7 +4,7 @@ import os
 import shutil
 import pandas as pd
 from fastapi import FastAPI, UploadFile, Form
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -37,7 +37,7 @@ LanguageCode = Literal["en", "ru", "es", "fr", "de", "it", "pt", "zh", "ja", "ar
 damage_model = Detector('path/to/model')
 parts_model = Segmenter('path/to/model')
 
-damage_costs = pd.read_csv('path/to/data')
+damage_costs = pd.read_csv('path/to/damage_costs')
 
 fallback_means = (
     damage_costs
@@ -50,8 +50,15 @@ fallback_means = (
 class UserData(BaseModel):
     make: str
     model: str
-    year: int
+    year: int = Field(..., description="Year of manufacture")
     vin: str = "UNKNOWN"
+
+    @field_validator("year")
+    def validate_year(cls, v):
+        current_year = datetime.now().year
+        if v < 1900 or v > current_year + 1:
+            raise ValueError(f"Year must be between 1900 and {current_year+1}, got {v}")
+        return v
 
 
 def get_estimated_cost(damage_type, part, user_data: UserData):
@@ -79,7 +86,7 @@ def get_estimated_cost(damage_type, part, user_data: UserData):
     return None, None, None
 
 
-def generate_llm_report(user_data: UserData, language_full: str = "English") -> str:
+def generate_llm_report(user_data: UserData, language: str = "en", language_full: str = "English") -> str:
     """
     Generates a professional damage report using LLM based on report.txt and user vehicle data.
     """
@@ -89,7 +96,7 @@ def generate_llm_report(user_data: UserData, language_full: str = "English") -> 
         base_url="https://api.deepseek.com"
     )
 
-    report_path = "report/report.txt"
+    report_path = f"report/report_{language}.txt"
     if not os.path.exists(report_path):
         raise FileNotFoundError("report.txt not found. Make sure detection step ran before LLM.")
 
@@ -104,6 +111,9 @@ def generate_llm_report(user_data: UserData, language_full: str = "English") -> 
     Your task is to write a **clear, human-readable, structured** vehicle damage assessment based on the provided data.
     Do NOT use markdown tables or complex formatting — only headings, bullet points, and paragraphs.
     Never output extra characters, code blocks, or decorative symbols.
+    If the provided damage-part pair is illogical 
+    (e.g. "flat tire in rear bumper"), correct it to the most 
+    plausible real-world combination (e.g. flat tire → wheel/tire).
 
     Rules for formatting:
     - Start with "Vehicle Damage Assessment Report"
@@ -119,6 +129,7 @@ def generate_llm_report(user_data: UserData, language_full: str = "English") -> 
     Also include a final section "Summary of Estimated Repair Costs" — just a bullet list of part: cost.
 
     If any price is missing, estimate a realistic market value for that type of repair.
+    **Important:** If there are no detected damages in the input data, do not write anything under "Detected Damages:" and do not invent any damages. Just keep the section empty or omit it entirely.
 
     Report Date: {current_time}
     Vehicle Information:
@@ -162,7 +173,8 @@ async def assess_damage(
     with open(img_path, "wb") as buffer:
         shutil.copyfileobj(image.file, buffer)
 
-    summary = build_damage_summary(img_path, damage_model, parts_model, conf=0.6)
+    summary = build_damage_summary(img_path, damage_model, parts_model, conf=0.3)
+    # print("DEBUG: summary", summary)
 
     report_lines = []
     for item in summary:
@@ -192,11 +204,11 @@ async def assess_damage(
     try:
         infer_damage = Inference(damage_model, img_path)
         damage_annot_path = os.path.join(annot_dir, f"damage_{image.filename}.jpg")
-        infer_damage.run(conf=0.6, iou=0.1, save_path=damage_annot_path)
+        infer_damage.run(conf=0.3, iou=0.1, save_path=damage_annot_path)
 
         infer_parts = Inference(parts_model, img_path)
         parts_annot_path = os.path.join(annot_dir, f"parts_{image.filename}.jpg")
-        infer_parts.run(conf=0.45, iou=0.1, save_path=parts_annot_path)
+        infer_parts.run(conf=0.25, iou=0.1, save_path=parts_annot_path)
     except Exception as e:
         print(f"[WARNING] Inference visualization failed: {e}")
         damage_annot_path = None
@@ -206,7 +218,7 @@ async def assess_damage(
     llm_report = None
     if generate_llm_report_flag:
         try:
-            llm_report = await asyncio.to_thread(generate_llm_report, user, LANGUAGE_MAP[language])
+            llm_report = await asyncio.to_thread(generate_llm_report, user, language=language, language_full=LANGUAGE_MAP[language])
         except Exception as e:
             print("LLM generation failed:", e)
             llm_report = None
