@@ -29,32 +29,6 @@ Traditional car damage assessment in insurance is slow and expensive: it require
 
 The system is implemented as a FastAPI service wrapping a complex ML pipeline. Key feature — **LLM-powered report synthesis**, where a large language model (DeepSeek) doesn’t just summarize, but corrects and enriches CV model outputs.
 
-```mermaid
-graph TD
-    subgraph "API Endpoint: /assess_damage"
-        A[POST: Images + Vehicle Metadata] --> B{Parallel Inference}
-    end
-
-    subgraph "Computer Vision Core"
-        B -- Full Image --> C[Part Segmentation\n(YOLOv8-Seg)]
-        B -- Full Image --> D[Damage Detection\n(YOLOv8-Det)]
-    end
-
-    subgraph "Logic & Enrichment Layer"
-        C --> E{Damage-Part Association}
-        D --> E
-        E --> F[Tiered Cost Estimation\n1. CSV Match (Make/Model/Year)\n2. CSV Fallback (Global Mean)\n3. LLM Estimate Needed]
-    end
-
-    subgraph "Report Generation Layer"
-        F --> G{LLM Synthesis & Correction}
-        A --> G
-        G --> H[Final PDF/JSON Report]
-    end
-
-    style G fill:#f9f,stroke:#333,stroke-width:2px
-```
-
 ### How It Works: Step-by-Step explanation
 
 1.  **Data Intake**: User uploads 1–N photos + metadata (make, model, year, VIN) to `/assess_damage`.
