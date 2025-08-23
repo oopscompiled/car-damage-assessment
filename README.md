@@ -32,24 +32,27 @@ The system is implemented as a FastAPI service wrapping a complex ML pipeline. K
 ```mermaid
 graph TD
     subgraph "API Endpoint: /assess_damage"
-        A[POST: Images + Vehicle Metadata] --> B{Parallel Inference};
+        A[POST: Images + Vehicle Metadata] --> B{Parallel Inference}
     end
 
     subgraph "Computer Vision Core"
-        B -- Full Image --> C[Part Segmentation<br/>(YOLOv8-Seg)];
-        B -- Full Image --> D[Damage Detection<br/>(YOLOv8-Det)];
+        B -- Full Image --> C[Part Segmentation (YOLOv8-Seg)]
+        B -- Full Image --> D[Damage Detection (YOLOv8-Det)]
     end
 
     subgraph "Logic & Enrichment Layer"
-        C --> E{Damage-Part Association};
-        D --> E;
-        E --> F[Tiered Cost Estimation<br/>1. CSV Match (Make/Model/Year)<br/>2. CSV Fallback (Global Mean)<br/>3. LLM Estimate Needed];
+        C --> E{Damage-Part Association}
+        D --> E
+        E --> F[Tiered Cost Estimation:
+        1. CSV Match (Make/Model/Year)
+        2. CSV Fallback (Global Mean)
+        3. LLM Estimate Needed]
     end
 
     subgraph "Report Generation Layer"
-        F --> G{LLM Synthesis & Correction};
-        A --> G;
-        G --> H[Final PDF/JSON Report];
+        F --> G{LLM Synthesis & Correction}
+        A --> G
+        G --> H[Final PDF/JSON Report]
     end
 
     style G fill:#f9f,stroke:#333,stroke-width:2px
