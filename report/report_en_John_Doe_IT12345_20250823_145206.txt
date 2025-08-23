@@ -1,0 +1,2 @@
+dent in front_door (conf=0.94, IoU=0.40) — Estimated Cost: $427.58 (range: $363.44–$491.71)
+scratch in front_door (conf=0.48, IoU=0.09) — Estimated Cost: $428.62 (range: $364.32–$492.91)

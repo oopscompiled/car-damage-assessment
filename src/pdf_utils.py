@@ -1,5 +1,4 @@
 import os
-import uuid
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -8,6 +7,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Image as RLImage
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from datetime import datetime
 
 # def generate_pdf_report(report_date, user_data, damages, llm_report=None, images=None, output_dir="generated_reports"):
 #     pdfmetrics.registerFont(TTFont('NotoSans', 'assets/NotoSans-Regular.ttf'))
@@ -126,7 +126,9 @@ def generate_pdf_report(report_date, user_data, damages, llm_report=None, images
     pdfmetrics.registerFont(TTFont('NotoSans', 'assets/NotoSans-Regular.ttf'))
 
     os.makedirs(output_dir, exist_ok=True)
-    filename = f"{output_dir}/report_{uuid.uuid4().hex[:8]}.pdf"
+    # filename = f"{output_dir}/report_{uuid.uuid4().hex[:8]}.pdf"
+    filename = f"{output_dir}/report_{user_data.first_name}_{user_data.last_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
 
     doc = SimpleDocTemplate(filename, pagesize=A4)
     styles = getSampleStyleSheet()

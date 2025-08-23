@@ -183,27 +183,36 @@ async def assess_damage(
 
     all_final_damage_list = []
     all_annot_paths = []
+    seen_keys = set() # keys to prevent duplicate damages
 
     for image in images:
         img_path = f"temp/{image.filename}"
-        os.makedirs("temp", exist_ok=True)
         with open(img_path, "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
 
         summary = build_damage_summary(img_path, damage_model, parts_model, conf=0.3)
 
         for item in summary:
-            line = f"{item['damage']} in {item['part']} (conf={item['confidence']:.2f}, IoU={item['iou']:.2f})"
             damage_type = item['damage']
             part = item['part']
+
+            # unique key
+            key = f"{damage_type}_{part}"
+
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+
+            line = f"{damage_type} in {part} (conf={item['confidence']:.2f}, IoU={item['iou']:.2f})"
+
             est, low, high = get_estimated_cost(damage_type, part, user)
             if est:
                 final_line = f"{line} — Estimated Cost: ${est} (range: ${low}–${high})"
             else:
                 final_line = f"{line} — Estimated Cost: [LLM Estimate Needed]"
 
-            if final_line not in all_final_damage_list:
-                all_final_damage_list.append(final_line)
+            all_final_damage_list.append(final_line)
+
 
         try:
             infer_damage = Inference(damage_model, img_path)
