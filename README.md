@@ -36,17 +36,14 @@ graph TD
     end
 
     subgraph "Computer Vision Core"
-        B -- Full Image --> C[Part Segmentation (YOLOv8-Seg)]
-        B -- Full Image --> D[Damage Detection (YOLOv8-Det)]
+        B -- Full Image --> C[Part Segmentation\n(YOLOv8-Seg)]
+        B -- Full Image --> D[Damage Detection\n(YOLOv8-Det)]
     end
 
     subgraph "Logic & Enrichment Layer"
         C --> E{Damage-Part Association}
         D --> E
-        E --> F[Tiered Cost Estimation:
-        1. CSV Match (Make/Model/Year)
-        2. CSV Fallback (Global Mean)
-        3. LLM Estimate Needed]
+        E --> F[Tiered Cost Estimation\n1. CSV Match (Make/Model/Year)\n2. CSV Fallback (Global Mean)\n3. LLM Estimate Needed]
     end
 
     subgraph "Report Generation Layer"
