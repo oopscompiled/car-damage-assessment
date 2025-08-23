@@ -1,14 +1,14 @@
-# app.py
-# uvicorn app:app --reload
+# start: uvicorn app:app --reload
 import os
 import shutil
 import pandas as pd
-from fastapi import FastAPI, UploadFile, Form
+from fastapi import FastAPI, UploadFile, Form, File
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
 import asyncio
+from typing import Literal, List
 
 app = FastAPI()
 
@@ -16,9 +16,7 @@ from src.detection.detector import Detector
 from src.segmentation.segmenter import Segmenter
 from src.utils import build_damage_summary, text_prepare, Inference
 from src.pdf_utils import generate_pdf_report
-from typing import Literal
 
-# LANGUAGE SUPPORT
 LANGUAGE_MAP = {
     "en": "English",
     "ru": "Russian",
@@ -31,14 +29,12 @@ LANGUAGE_MAP = {
     "ja": "Japanese",
     "ar": "Arabic"
 }
-
 LanguageCode = Literal["en", "ru", "es", "fr", "de", "it", "pt", "zh", "ja", "ar"]
 
-damage_model = Detector('path/to/model')
-parts_model = Segmenter('path/to/model')
+damage_model = Detector('/Users/pacuk/Documents/clean-repo/models/yolo-detect-0.54-960px.pt')
+parts_model = Segmenter('/Users/pacuk/Documents/clean-repo/models/yolo-seg-0.8-1280px.pt')
 
-damage_costs = pd.read_csv('path/to/damage_costs')
-
+damage_costs = pd.read_csv('/Users/pacuk/Documents/clean-repo/data/damage_costs.csv')
 fallback_means = (
     damage_costs
     .groupby(['damage_type', 'part'])['average_cost_usd']
@@ -46,12 +42,17 @@ fallback_means = (
     .reset_index()
 )
 
+os.makedirs("report", exist_ok=True)
+os.makedirs("annotated", exist_ok=True)
+
 
 class UserData(BaseModel):
     make: str
     model: str
     year: int = Field(..., description="Year of manufacture")
     vin: str = "UNKNOWN"
+    first_name: str = "John"
+    last_name: str = "Doe"  
 
     @field_validator("year")
     def validate_year(cls, v):
@@ -61,6 +62,7 @@ class UserData(BaseModel):
         return v
 
 
+# === UTILS ===
 def get_estimated_cost(damage_type, part, user_data: UserData):
     filtered = damage_costs[
         (damage_costs['make'] == user_data.make.lower()) &
@@ -86,19 +88,25 @@ def get_estimated_cost(damage_type, part, user_data: UserData):
     return None, None, None
 
 
-def generate_llm_report(user_data: UserData, language: str = "en", language_full: str = "English") -> str:
-    """
-    Generates a professional damage report using LLM based on report.txt and user vehicle data.
-    """
+def generate_llm_report(
+    user_data: UserData,
+    language: str = "en",
+    language_full: str = "English",
+    case_id: str = None
+) -> str:
+    
     load_dotenv()
     client = OpenAI(
         api_key=os.getenv('OPENAI_API_KEY'),
         base_url="https://api.deepseek.com"
     )
 
-    report_path = f"report/report_{language}.txt"
+    if case_id is None:
+        case_id = f"{user_data.first_name}_{user_data.last_name}_{user_data.vin}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    report_path = f"report/report_{language}_{case_id}.txt"
+
     if not os.path.exists(report_path):
-        raise FileNotFoundError("report.txt not found. Make sure detection step ran before LLM.")
+        raise FileNotFoundError(f"{report_path} not found. Make sure detection step ran before LLM.")
 
     with open(report_path, "r", encoding="utf-8") as f:
         report_content = f.read()
@@ -106,136 +114,141 @@ def generate_llm_report(user_data: UserData, language: str = "en", language_full
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     prompt = f"""
-    You are a professional automotive damage report writer.
-    Write the report in {language_full} language.
-    Your task is to write a **clear, human-readable, structured** vehicle damage assessment based on the provided data.
-    Do NOT use markdown tables or complex formatting — only headings, bullet points, and paragraphs.
-    Never output extra characters, code blocks, or decorative symbols.
-    If the provided damage-part pair is illogical 
-    (e.g. "flat tire in rear bumper"), correct it to the most 
-    plausible real-world combination (e.g. flat tire → wheel/tire).
+        You are a professional automotive damage report writer with expert knowledge of vehicle parts and materials.
+        Your task is to create a clear, accurate, and physically plausible damage report.
 
-    Rules for formatting:
-    - Start with "Vehicle Damage Assessment Report"
-    - Then "Report Date: <date>"
-    - Then "Vehicle Information:" as bullet points
-    - Then "Detected Damages:" — one bullet per damage, each with:
-        • Damage type and vehicle part
-        • Detection confidence (%)
-        • Localization accuracy (IoU %)
-        • Estimated repair cost in USD (with a range if available)
-        • "See attached image" for photo reference
+        Write the report in {language_full} language.
 
-    Also include a final section "Summary of Estimated Repair Costs" — just a bullet list of part: cost.
+        Format rules:
+        - Title: "Vehicle Damage Assessment Report"
+        - Then "Report Date: <date>"
+        - Then "Prepared for: {user_data.first_name} {user_data.last_name}"
+        - Then "Vehicle Information" as bullet points
+        - Then "Detected Damages" (one bullet per damage, with confidence, IoU, estimated cost, and "See attached image").
+        - At the end add "Summary of Estimated Repair Costs":
+            * bullet list of part: cost
+            * final line "Total Estimated Repair Cost: $<sum>"
 
-    If any price is missing, estimate a realistic market value for that type of repair.
-    **Important:** If there are no detected damages in the input data, do not write anything under "Detected Damages:" and do not invent any damages. Just keep the section empty or omit it entirely.
+        Processing and Correction Rules:
+        - You will receive a list of damages detected by a computer vision model. This data may contain errors.
+        - **Critically analyze each detected damage. If a damage type is physically impossible for a specific part (e.g., a "dent" on a glass or plastic part like a headlight or window), you MUST correct it to a plausible damage type.**
+        - For example, if the input is "Dent in front light", you should report it as "Cracked front light", "Broken front light", or "Scratched front light". Use your expertise to choose the most likely term.
+        - Do NOT invent damages if none are detected. Only correct the description of existing, but poorly described, damages.
 
-    Report Date: {current_time}
-    Vehicle Information:
-    - Make: {user_data.make}
-    - Model: {user_data.model}
-    - Year: {user_data.year}
-    - VIN: {user_data.vin}
+        If any price is missing, estimate a realistic repair cost.
 
-    Detected Damages (from CV models):
-    {report_content}
+        Report Date: {current_time}
+        Vehicle Information:
+        - Make: {user_data.make}
+        - Model: {user_data.model}
+        - Year: {user_data.year}
+        - VIN: {user_data.vin}
 
-    Write the report exactly in this structure, without any extra commentary.
-    """
+        Detected Damages (from CV models, requires your expert correction):
+        {report_content}
+        """
 
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[
             {"role": "system", "content": f"You are a report generator for vehicle damage assessments. Output in {language_full}."},
             {"role": "user", "content": prompt}
-        ],
-        stream=False
+        ]
     )
 
     return response.choices[0].message.content.strip()
 
 
+# === MAIN ENDPOINT ===
 @app.post("/assess_damage")
 async def assess_damage(
-    image: UploadFile,
+    images: List[UploadFile] = File(...),
     make: str = Form(...),
     model: str = Form(...),
     year: int = Form(...),
     vin: str = Form("UNKNOWN"),
+    first_name: str = Form("UNKNOWN"),
+    last_name: str = Form("UNKNOWN"),
     generate_llm_report_flag: bool = Form(False),
     language: LanguageCode = Form("en")
 ):
-    
-    img_path = f"temp/{image.filename}"
-    os.makedirs("temp", exist_ok=True)
-
-    with open(img_path, "wb") as buffer:
-        shutil.copyfileobj(image.file, buffer)
-
-    summary = build_damage_summary(img_path, damage_model, parts_model, conf=0.3)
-    # print("DEBUG: summary", summary)
-
-    report_lines = []
-    for item in summary:
-        line = f"{item['damage']} in {item['part']} (conf={item['confidence']:.2f}, IoU={item['iou']:.2f})"
-        report_lines.append(line)
-
-    user = UserData(make=make, model=model, year=year, vin=vin)
-    final_damage_list = []
-    for line in report_lines:
-        if " in " not in line:
-            continue
-        damage_type = line.split(" in ")[0].strip()
-        part = line.split(" in ")[1].split(" ")[0].strip()
-        est, low, high = get_estimated_cost(damage_type, part, user)
-        if est:
-            final_line = f"{line} — Estimated Cost: ${est} (range: ${low}–${high})"
-        else:
-            final_line = f"{line} — Estimated Cost: [LLM Estimate Needed]"
-        final_damage_list.append(final_line)
-
-    # report
-    text_prepare(final_damage_list)
-
-    # IMAGE SAVE
-    annot_dir = "temp/annotated"
+    case_id = f"{first_name}_{last_name}_{vin}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    report_dir = "report"
+    os.makedirs(report_dir, exist_ok=True)
+    report_path = os.path.join(report_dir, f"report_{language}_{case_id}.txt")
+    annot_dir = "annotated"
     os.makedirs(annot_dir, exist_ok=True)
-    try:
-        infer_damage = Inference(damage_model, img_path)
-        damage_annot_path = os.path.join(annot_dir, f"damage_{image.filename}.jpg")
-        infer_damage.run(conf=0.3, iou=0.1, save_path=damage_annot_path)
 
-        infer_parts = Inference(parts_model, img_path)
-        parts_annot_path = os.path.join(annot_dir, f"parts_{image.filename}.jpg")
-        infer_parts.run(conf=0.25, iou=0.1, save_path=parts_annot_path)
-    except Exception as e:
-        print(f"[WARNING] Inference visualization failed: {e}")
-        damage_annot_path = None
-        parts_annot_path = None
+    user = UserData(make=make, model=model, year=year, vin=vin, first_name=first_name, last_name=last_name)
 
-    # LLM
+    all_final_damage_list = []
+    all_annot_paths = []
+
+    for image in images:
+        img_path = f"temp/{image.filename}"
+        os.makedirs("temp", exist_ok=True)
+        with open(img_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+
+        summary = build_damage_summary(img_path, damage_model, parts_model, conf=0.3)
+
+        for item in summary:
+            line = f"{item['damage']} in {item['part']} (conf={item['confidence']:.2f}, IoU={item['iou']:.2f})"
+            damage_type = item['damage']
+            part = item['part']
+            est, low, high = get_estimated_cost(damage_type, part, user)
+            if est:
+                final_line = f"{line} — Estimated Cost: ${est} (range: ${low}–${high})"
+            else:
+                final_line = f"{line} — Estimated Cost: [LLM Estimate Needed]"
+
+            if final_line not in all_final_damage_list:
+                all_final_damage_list.append(final_line)
+
+        try:
+            infer_damage = Inference(damage_model, img_path)
+            damage_annot_path = os.path.join(annot_dir, f"damage_{image.filename}.jpg")
+            infer_damage.run(conf=0.3, iou=0.1, save_path=damage_annot_path)
+            all_annot_paths.append(damage_annot_path)
+
+            infer_parts = Inference(parts_model, img_path)
+            parts_annot_path = os.path.join(annot_dir, f"parts_{image.filename}.jpg")
+            infer_parts.run(conf=0.25, iou=0.1, save_path=parts_annot_path)
+            all_annot_paths.append(parts_annot_path)
+        except Exception as e:
+            print(f"[WARNING] Inference visualization failed for {image.filename}: {e}")
+
+    text_prepare(all_final_damage_list, language=language, case_id=case_id)
+
+    # LLM REPORT
     llm_report = None
     if generate_llm_report_flag:
         try:
-            llm_report = await asyncio.to_thread(generate_llm_report, user, language=language, language_full=LANGUAGE_MAP[language])
+            llm_report = await asyncio.to_thread(
+                generate_llm_report,
+                user,
+                language=language,
+                language_full=LANGUAGE_MAP[language],
+                case_id=case_id
+            )
         except Exception as e:
             print("LLM generation failed:", e)
-            llm_report = None
-    # PDF
+
+    #  PDF REPORT 
     pdf_path = generate_pdf_report(
         report_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         user_data=user,
-        damages=final_damage_list if llm_report is None else None,
+        damages=all_final_damage_list if llm_report is None else None,
         llm_report=llm_report,
-        images=[os.path.abspath(p) for p in [damage_annot_path, parts_annot_path] if p]
-# images=[p for p in [damage_annot_path, parts_annot_path] if p]
+        images=[os.path.abspath(p) for p in all_annot_paths if p]
     )
 
     return {
         "report_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "vehicle": user,
-        "damages": final_damage_list,
+        "damages": all_final_damage_list,
         "llm_report": llm_report,
-        "pdf_path": pdf_path
+        "pdf_path": pdf_path,
+        "annotated_images": all_annot_paths,
+        "report_path": report_path
     }

@@ -429,15 +429,18 @@ def build_damage_summary(image_path, model_damage, model_parts, conf=0.65, iou_t
 
     return damage_summary
 
-def text_prepare(text, language='en'):
+def text_prepare(text, language='en', case_id=None):
     if text is None:
         raise ValueError("You need to pass text (list of strings or text)")
     
     cwd = os.getcwd()
     os.makedirs('report', exist_ok=True)
     folder = os.path.join(cwd, 'report')
-    file_path = os.path.join(folder, f'report_{language}.txt')
-
+    
+    if case_id:
+        file_path = os.path.join(folder, f'report_{language}_{case_id}.txt')
+    else:
+        file_path = os.path.join(folder, f'report_{language}.txt')
 
     with open(file_path, 'w', encoding='utf-8') as f:
         if isinstance(text, str):
@@ -447,3 +450,4 @@ def text_prepare(text, language='en'):
                 f.write(str(line) + '\n')
 
     print(f'File created at {file_path}')
+    return file_path
