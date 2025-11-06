@@ -8,8 +8,7 @@
 
 ## Demo
 
-https://github.com/oopscompiled/car-damage-assessment/blob/main/demo.mp4
-
+https://github.com/oopscompiled/car-damage-assessment/blob/main/demo.mp4?raw=1
 
 ## Business Context: from days to 5 minutes
 
