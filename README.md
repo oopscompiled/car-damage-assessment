@@ -8,8 +8,7 @@
 
 ## Demo
 
-https://github.com/oopscompiled/car-damage-assessment/blob/main/demo.mp4?raw=1
-
+<video src="https://github.com/user-attachments/assets/2c429fb9-6d26-44b6-b4cb-da1f6fb988a0" controls></video>
 ## Business Context: from days to 5 minutes
 
 Traditional car damage assessment in insurance is slow and expensive: it requires an adjuster to visit, manually inspect, and fill out paperwork, taking anywhere from 24 hours to several days. This causes unhappy customers, churn, and high operational costs.
