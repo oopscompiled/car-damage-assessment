@@ -6,6 +6,10 @@
 
 **Visual Damage Assessment Pipeline** is a full-stack ML system built to automate car damage assessment for the insurance company "Secure Future." It turns photos of damage into ready-to-use reports in minutes instead of days.
 
+**Demo:**
+
+<video src="demo.mp4" controls></video>
+
 ## Business Context: from days to 5 minutes
 
 Traditional car damage assessment in insurance is slow and expensive: it requires an adjuster to visit, manually inspect, and fill out paperwork, taking anywhere from 24 hours to several days. This causes unhappy customers, churn, and high operational costs.
